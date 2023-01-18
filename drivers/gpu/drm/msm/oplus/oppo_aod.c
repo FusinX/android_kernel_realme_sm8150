@@ -15,7 +15,7 @@
 #include "dsi_defs.h"
 #include "oppo_aod.h"
 
-int aod_light_mode = 0;
+int aod_light_mode = 1;
 DEFINE_MUTEX(oppo_aod_light_mode_lock);
 
 int __oppo_display_set_aod_light_mode(int mode) {
