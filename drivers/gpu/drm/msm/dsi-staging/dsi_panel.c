@@ -1100,8 +1100,9 @@ static int dsi_panel_update_backlight(struct dsi_panel *panel,
 
 	dsi = &panel->mipi_device;
 #ifdef OPLUS_BUG_STABILITY
-	if ((get_oppo_display_scene() == OPPO_DISPLAY_AOD_SCENE) && ( bl_lvl == 1)) {
-		pr_err("dsi_cmd AOD mode return bl_lvl:%d\n",bl_lvl);
+	if (get_oppo_display_scene() == OPPO_DISPLAY_AOD_SCENE) {
+		/* Don't set backlight; just update AoD mode */
+		oppo_update_aod_light_mode_unlock(panel);
 		return 0;
 	}
 

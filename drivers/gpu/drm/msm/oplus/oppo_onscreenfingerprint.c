@@ -14,6 +14,7 @@
 #include "sde_crtc.h"
 #include "oppo_onscreenfingerprint.h"
 #include "oppo_display_private_api.h"
+#include "oppo_aod.h"
 
 #define DSI_PANEL_OPPO_DUMMY_VENDOR_NAME  "PanelVendorDummy"
 #define DSI_PANEL_OPPO_DUMMY_MANUFACTURE_NAME  "dummy1024"
@@ -30,10 +31,12 @@ extern int oppo_dimlayer_dither_threshold;
 extern u32 oppo_last_backlight;
 extern int oppo_dimlayer_hbm;
 extern int oppo_dimlayer_hbm_saved;
+extern int oppo_dimlayer_aod;
 int oppo_aod_dim_alpha = CUST_A_NO;
 extern int oppo_panel_alpha;
 extern int hbm_mode;
 extern bool oppo_ffl_trigger_finish;
+extern int aod_light_mode;
 
 static struct oppo_brightness_alpha brightness_alpha_lut[] = {
 	{0, 0xff},
@@ -173,6 +176,52 @@ static int bl_to_alpha_dc(int brightness)
 	return alpha;
 }
 
+static int bl_to_alpha_aod(int brightness)
+{
+	struct dsi_display *display = get_main_display();
+	struct oppo_brightness_alpha *lut = NULL;
+	int count = 0;
+	int i = 0;
+	int alpha;
+
+	if (!display)
+		return 0;
+
+	if (aod_light_mode == 1) {
+		if (display->panel->aod_low_ba_seq && display->panel->aod_low_ba_count) {
+			count = display->panel->aod_low_ba_count;
+			lut = display->panel->aod_low_ba_seq;
+		} else {
+			/* missing config; return 0 (fully transparent) */
+			return 0;
+		}
+	} else {
+		if (display->panel->aod_high_ba_seq && display->panel->aod_high_ba_count) {
+			count = display->panel->aod_high_ba_count;
+			lut = display->panel->aod_high_ba_seq;
+		} else {
+			/* missing config; return 0 (fully transparent) */
+			return 0;
+		}
+	}
+
+	for (i = 0; i < count; i++){
+		if (lut[i].brightness >= brightness)
+			break;
+	}
+
+	if (i == 0)
+		alpha = lut[0].alpha;
+	else if (i == count)
+		alpha = lut[count - 1].alpha;
+	else
+		alpha = 	interpolate(brightness, lut[i-1].brightness,
+				    lut[i].brightness, lut[i-1].alpha,
+				    lut[i].alpha);
+
+	return alpha;
+}
+
 static int brightness_to_alpha(int brightness)
 {
 	int alpha;
@@ -190,12 +239,12 @@ static int brightness_to_alpha(int brightness)
 		}
 	}
 
-	if (oppo_dimlayer_hbm) {
+	if (oppo_dimlayer_hbm)
 		alpha = bl_to_alpha(brightness);
-
-	} else {
+	else if (oppo_dimlayer_aod)
+		alpha = bl_to_alpha_aod(brightness);
+	else
 		alpha = bl_to_alpha_dc(brightness);
-	}
 
 	return alpha;
 }
@@ -368,6 +417,7 @@ int dsi_panel_parse_oppo_config(struct dsi_panel *panel)
 
 	dsi_panel_parse_oppo_fod_config(panel);
 	dsi_panel_parse_oppo_backlight_remapping_config(panel);
+	dsi_panel_parse_oplus_aod_config(panel);
 
 	panel->oppo_priv.vendor_name = utils->get_property(utils->data,
 			"oppo,mdss-dsi-vendor-name", NULL);

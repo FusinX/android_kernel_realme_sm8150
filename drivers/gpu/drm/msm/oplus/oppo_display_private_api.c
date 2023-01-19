@@ -69,6 +69,7 @@ u32 oppo_backlight_delta = 0;
 
 int oppo_dimlayer_hbm = 0;
 int oppo_dimlayer_hbm_saved = 0;
+int oppo_dimlayer_aod = 0;
 
 extern PANEL_VOLTAGE_BAK panel_vol_bak[PANEL_VOLTAGE_ID_MAX];
 extern u32 panel_pwr_vg_base;
@@ -2555,6 +2556,7 @@ int dsi_display_oppo_set_power(struct drm_connector *connector,
 		case OPPO_DISPLAY_NORMAL_SCENE:
 		case OPPO_DISPLAY_NORMAL_HBM_SCENE:
 			oppo_dimlayer_hbm = 0;
+			oppo_dimlayer_aod = 1;
 			oppo_dimlayer_vblank(connector->state->crtc);
 			rc = dsi_panel_set_lp1(display->panel);
 			rc = dsi_panel_set_lp2(display->panel);
@@ -2582,8 +2584,9 @@ int dsi_display_oppo_set_power(struct drm_connector *connector,
 		set_oppo_display_power_status(OPPO_DISPLAY_POWER_ON);
 		if (oppo_dimlayer_hbm != oppo_dimlayer_hbm_saved) {
 			oppo_dimlayer_hbm = oppo_dimlayer_hbm_saved;
-			oppo_dimlayer_vblank(connector->state->crtc);
 		}
+		oppo_dimlayer_aod = 0;
+		oppo_dimlayer_vblank(connector->state->crtc);
 		msm_drm_notifier_call_chain(MSM_DRM_EVENT_BLANK,
 			&notifier_data);
 		osc_count = 1;

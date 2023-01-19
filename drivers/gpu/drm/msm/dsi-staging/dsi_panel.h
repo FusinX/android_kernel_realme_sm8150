@@ -220,6 +220,7 @@ struct dsi_panel_oppo_privite {
 	int bl_remap_count;
 	u32 pll_delay;
 	u32 prj_flag;
+	u32 aod_low_brightness_threshold;
 };
 #endif /* OPLUS_BUG_STABILITY */
 
@@ -287,6 +288,10 @@ struct dsi_panel {
 	struct oppo_brightness_alpha *dc_ba_seq;
 	int ba_count;
 	int dc_ba_count;
+	struct oppo_brightness_alpha *aod_high_ba_seq;
+	int aod_high_ba_count;
+	struct oppo_brightness_alpha *aod_low_ba_seq;
+	int aod_low_ba_count;
 	struct dsi_panel_oppo_privite oppo_priv;
 	bool is_err_flag_irq_enabled;
 	bool err_flag_status;

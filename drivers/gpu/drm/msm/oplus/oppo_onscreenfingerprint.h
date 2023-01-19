@@ -18,6 +18,7 @@
 #include "dsi_defs.h"
 #include "dsi_parser.h"
 #include "sde_encoder_phys.h"
+#include "oppo_display_private_api.h"
 
 
 #define FFL_FP_LEVEL 150
