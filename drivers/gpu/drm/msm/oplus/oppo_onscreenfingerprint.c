@@ -542,7 +542,7 @@ bool is_skip_pcc(struct drm_crtc *crtc)
 {
 	if (OPPO_DISPLAY_POWER_DOZE_SUSPEND == get_oppo_display_power_status() ||
 		OPPO_DISPLAY_POWER_DOZE == get_oppo_display_power_status() ||
-		sde_crtc_get_fingerprint_mode(crtc->state)) {
+		sde_crtc_get_fingerprint_pressed(crtc->state)) {
 		return true;
 	}
 
