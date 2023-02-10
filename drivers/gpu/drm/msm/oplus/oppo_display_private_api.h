@@ -62,4 +62,6 @@ int dsi_display_oppo_set_power(struct drm_connector *connector, int power_mode, 
 
 int oppo_display_dynamic_clk_update_osc_clk(int clk_rate);
 
+void oppo_dimlayer_vblank(struct drm_crtc *crtc);
+
 #endif /* _OPPO_DISPLAY_PRIVATE_API_H_ */

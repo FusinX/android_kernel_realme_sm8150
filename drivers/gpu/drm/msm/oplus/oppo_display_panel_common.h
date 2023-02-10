@@ -55,4 +55,5 @@ int oplus_display_panel_set_closebl_flag(void *data);
 int oplus_display_panel_get_brightness(void *buf);
 int oppo_display_set_aod_area(void *buf);
 int oplus_display_panel_set_dimlayer_hbm(void *data);
+void oppo_dimlayer_vblank(struct drm_crtc *crtc);
 #endif /*_OPPO_DISPLAY_PANEL_COMMON_H_*/

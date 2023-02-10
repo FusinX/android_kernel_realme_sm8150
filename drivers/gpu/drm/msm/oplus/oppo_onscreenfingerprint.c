@@ -29,6 +29,7 @@ extern int oppo_underbrightness_alpha;
 extern int oppo_dimlayer_dither_threshold;
 extern u32 oppo_last_backlight;
 extern int oppo_dimlayer_hbm;
+extern int oppo_dimlayer_hbm_saved;
 int oppo_aod_dim_alpha = CUST_A_NO;
 extern int oppo_panel_alpha;
 extern int hbm_mode;
@@ -757,8 +758,7 @@ int oplus_display_panel_get_dimlayer_hbm(void *data)
 {
 	uint32_t *dimlayer_hbm = data;
 
-	(*dimlayer_hbm) = oppo_dimlayer_hbm;
+	(*dimlayer_hbm) = oppo_dimlayer_hbm_saved;
 
 	return 0;
 }
-

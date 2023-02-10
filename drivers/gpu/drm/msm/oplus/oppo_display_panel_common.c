@@ -15,6 +15,7 @@
 int oppo_debug_max_brightness = 0;
 extern int lcd_closebl_flag;
 extern int oppo_dimlayer_hbm;
+extern int oppo_dimlayer_hbm_saved;
 extern int oppo_dimlayer_hbm_vblank_count;
 extern atomic_t oppo_dimlayer_hbm_vblank_ref;
 
@@ -580,24 +581,40 @@ int oplus_display_panel_set_dimlayer_hbm(void *data)
 	int value = (*dimlayer_hbm);
 
 	value = !!value;
-	if (oppo_dimlayer_hbm == value)
+	if (oppo_dimlayer_hbm_saved == value)
 		return 0;
-	if (!dsi_connector || !dsi_connector->state || !dsi_connector->state->crtc) {
-		pr_err("[%s]: display not ready\n", __func__);
-	} else {
-		err = drm_crtc_vblank_get(dsi_connector->state->crtc);
-		if (err) {
-			pr_err("failed to get crtc vblank, error=%d\n", err);
+	if (get_oppo_display_power_status() == OPPO_DISPLAY_POWER_ON) {
+		if (!dsi_connector || !dsi_connector->state || !dsi_connector->state->crtc) {
+			pr_err("[%s]: display not ready\n", __func__);
 		} else {
-			/* do vblank put after 5 frames */
-			oppo_dimlayer_hbm_vblank_count = 5;
-			atomic_inc(&oppo_dimlayer_hbm_vblank_ref);
+			err = drm_crtc_vblank_get(dsi_connector->state->crtc);
+			if (err) {
+				pr_err("failed to get crtc vblank, error=%d\n", err);
+			} else {
+				/* do vblank put after 5 frames */
+				oppo_dimlayer_hbm_vblank_count = 5;
+				atomic_inc(&oppo_dimlayer_hbm_vblank_ref);
+			}
 		}
+		oppo_dimlayer_hbm = value;
 	}
-	oppo_dimlayer_hbm = value;
-	pr_err("debug for oplus_display_set_dimlayer_hbm set oppo_dimlayer_hbm = %d\n", oppo_dimlayer_hbm);
+	oppo_dimlayer_hbm_saved = value;
+
+	pr_err("debug for oppo_display_set_dimlayer_hbm set oppo_dimlayer_hbm = %d, oppo_dimlayer_hbm_saved = %d\n",
+		oppo_dimlayer_hbm, oppo_dimlayer_hbm_saved);
 
 	return 0;
+}
+
+void oppo_dimlayer_vblank(struct drm_crtc *crtc) {
+	int err = drm_crtc_vblank_get(crtc);
+	if (err) {
+		pr_err("failed to get crtc vblank, error=%d\n", err);
+	} else {
+		/* do vblank put after 5 frames */
+		oppo_dimlayer_hbm_vblank_count = 5;
+		atomic_inc(&oppo_dimlayer_hbm_vblank_ref);
+	}
 }
 
 #endif /* OPLUS_BUG_STABILITY */
