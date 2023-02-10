@@ -81,6 +81,7 @@ u32 oppo_last_backlight = 0;
 u32 oppo_backlight_delta = 0;
 
 int oppo_dimlayer_hbm = 0;
+int oppo_dimlayer_hbm_saved = 0;
 
 extern PANEL_VOLTAGE_BAK panel_vol_bak[PANEL_VOLTAGE_ID_MAX];
 extern u32 panel_pwr_vg_base;
@@ -1946,7 +1947,7 @@ static ssize_t oppo_display_set_dimlayer_enable(struct device *dev,
 static ssize_t oppo_display_get_dimlayer_hbm(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
-	return sprintf(buf, "%d\n", oppo_dimlayer_hbm);
+	return sprintf(buf, "%d\n", oppo_dimlayer_hbm_saved);
 }
 
 int oppo_dimlayer_hbm_vblank_count = 0;
@@ -1963,32 +1964,31 @@ static ssize_t oppo_display_set_dimlayer_hbm(struct device *dev,
 	sscanf(buf, "%d", &value);
 	value = !!value;
 
-	if (oppo_dimlayer_hbm == value) {
+	if (oppo_dimlayer_hbm_saved == value) {
 		return count;
 	}
 
-	if (!dsi_connector || !dsi_connector->state || !dsi_connector->state->crtc) {
-		pr_err("[%s]: display not ready\n", __func__);
-
+	if (get_oppo_display_power_status() == OPPO_DISPLAY_POWER_ON) {
+		if (!dsi_connector || !dsi_connector->state || !dsi_connector->state->crtc) {
+			pr_err("[%s]: display not ready\n", __func__);
 	} else {
-		err = drm_crtc_vblank_get(dsi_connector->state->crtc);
-
-		if (err) {
-			pr_err("failed to get crtc vblank, error=%d\n", err);
-
-		} else {
-			/* do vblank put after 20 frames */
-			oppo_dimlayer_hbm_vblank_count = 20;
-			atomic_inc(&oppo_dimlayer_hbm_vblank_ref);
+			err = drm_crtc_vblank_get(dsi_connector->state->crtc);
+			if (err) {
+				pr_err("failed to get crtc vblank, error=%d\n", err);
+			} else {
+				/* do vblank put after 20 frames */
+				oppo_dimlayer_hbm_vblank_count = 20;
+				atomic_inc(&oppo_dimlayer_hbm_vblank_ref);
+			}
 		}
+		oppo_dimlayer_hbm = value;
 	}
-
-	oppo_dimlayer_hbm = value;
+	oppo_dimlayer_hbm_saved = value;
 
 #ifdef VENDOR_EDIT
 	/* Hu Jie@PSW.MM.Display.Lcd.Stability, 2019-09-27, add log at display key evevnt */
-	pr_err("debug for oppo_display_set_dimlayer_hbm set oppo_dimlayer_hbm = %d\n",
-		oppo_dimlayer_hbm);
+	pr_err("debug for oppo_display_set_dimlayer_hbm set oppo_dimlayer_hbm = %d, oppo_dimlayer_hbm_saved = %d\n",
+		oppo_dimlayer_hbm, oppo_dimlayer_hbm_saved);
 #endif
 
 	return count;
@@ -2166,6 +2166,18 @@ int oppo_display_atomic_check(struct drm_crtc *crtc, struct drm_crtc_state *stat
 	return 0;
 }
 #endif /* OPLUS_FEATURE_AOD_RAMLESS */
+
+void oppo_dimlayer_vblank(struct drm_crtc *crtc) {
+	int err = drm_crtc_vblank_get(crtc);
+	if (err) {
+		pr_err("failed to get crtc vblank, error=%d\n", err);
+	} else {
+		/* do vblank put after 5 frames */
+		oppo_dimlayer_hbm_vblank_count = 5;
+		atomic_inc(&oppo_dimlayer_hbm_vblank_ref);
+	}
+}
+
 static ssize_t oppo_display_notify_fp_press(struct device *dev,
 	struct device_attribute *attr,
 	const char *buf, size_t count)
@@ -2605,9 +2617,10 @@ int dsi_display_oppo_set_power(struct drm_connector *connector,
 	case SDE_MODE_DPMS_LP1:
 	case SDE_MODE_DPMS_LP2:
 		switch(get_oppo_display_scene()) {
-			break;
 		case OPPO_DISPLAY_NORMAL_SCENE:
 		case OPPO_DISPLAY_NORMAL_HBM_SCENE:
+			oppo_dimlayer_hbm = 0;
+			oppo_dimlayer_vblank(connector->state->crtc);
 			rc = dsi_panel_set_lp1(display->panel);
 			rc = dsi_panel_set_lp2(display->panel);
 			set_oppo_display_scene(OPPO_DISPLAY_AOD_SCENE);
@@ -2665,6 +2678,10 @@ int dsi_display_oppo_set_power(struct drm_connector *connector,
 		oppo_dsi_update_seed_mode();
 		oppo_display_update_osc_clk();
 		set_oppo_display_power_status(OPPO_DISPLAY_POWER_ON);
+		if (oppo_dimlayer_hbm != oppo_dimlayer_hbm_saved) {
+			oppo_dimlayer_hbm = oppo_dimlayer_hbm_saved;
+			oppo_dimlayer_vblank(connector->state->crtc);
+		}
 		msm_drm_notifier_call_chain(MSM_DRM_EVENT_BLANK,
 			&notifier_data);
 		osc_count = 1;
