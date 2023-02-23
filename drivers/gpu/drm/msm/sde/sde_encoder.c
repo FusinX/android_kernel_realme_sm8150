@@ -305,6 +305,7 @@ struct sde_encoder_virt {
 
 	bool recovery_events_enabled;
 	bool elevated_ahb_vote;
+	struct msm_mode_info mode_info;
 	struct pm_qos_request pm_qos_cpu_req;
 };
 
@@ -2367,12 +2368,14 @@ static int sde_encoder_resource_control(struct drm_encoder *drm_enc,
 		u32 sw_event)
 {
 	bool autorefresh_enabled = false;
-	unsigned int lp, idle_pc_duration;
+	unsigned int lp, idle_pc_duration, frame_time_ms, fps;
 	struct sde_encoder_virt *sde_enc;
 	struct msm_drm_private *priv;
 	struct msm_drm_thread *disp_thread;
 	int ret;
 	bool is_vid_mode = false;
+	unsigned int min_duration = IDLE_POWERCOLLAPSE_DURATION;
+	unsigned int max_duration = IDLE_POWERCOLLAPSE_IN_EARLY_WAKEUP;
 
 	if (!drm_enc || !drm_enc->dev || !drm_enc->dev->dev_private) {
 		SDE_ERROR("invalid encoder parameters, sw_event:%u\n",
@@ -2509,10 +2512,15 @@ static int sde_encoder_resource_control(struct drm_encoder *drm_enc,
 		else
 			lp = SDE_MODE_DPMS_ON;
 
+		fps = sde_enc->mode_info.frame_rate;
 		if ((lp == SDE_MODE_DPMS_LP1) || (lp == SDE_MODE_DPMS_LP2))
 			idle_pc_duration = IDLE_SHORT_TIMEOUT;
-		else
-			idle_pc_duration = IDLE_POWERCOLLAPSE_DURATION;
+		else {
+			frame_time_ms = 1000;
+			do_div(frame_time_ms, fps);
+			idle_pc_duration = max(4 * frame_time_ms, min_duration);
+			idle_pc_duration = min(idle_pc_duration, max_duration);
+		}
 
 		msm_idle_set_state(drm_enc, false);
 
