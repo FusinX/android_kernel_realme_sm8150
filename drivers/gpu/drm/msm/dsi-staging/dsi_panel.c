@@ -4779,10 +4779,18 @@ int dsi_panel_set_lp2(struct dsi_panel *panel)
 	if (rc)
 		pr_err("[%s] failed to send DSI_CMD_SET_LP2 cmd, rc=%d\n",
 		       panel->name, rc);
+
+	//It has been observed entering lp2 without first entering lp1 on doze.
+	//In this case regulator stays in NORMAL mode, which is a power regression.
+	if (dsi_panel_is_type_oled(panel) &&
+	    panel->power_mode != SDE_MODE_DPMS_LP1)
+		dsi_pwr_panel_regulator_mode_set(&panel->power_info,
+			"ibb", REGULATOR_MODE_IDLE);
 #ifdef OPLUS_BUG_STABILITY
 /* Sachin Shukla@PSW.MM.Display.LCD.Stability,2018/11/21,
  * Set and save display status
 */
+	panel->need_power_on_backlight = true;
 	set_oppo_display_power_status(OPPO_DISPLAY_POWER_DOZE_SUSPEND);
 #endif /* OPLUS_BUG_STABILITY */
 exit:
