@@ -2385,6 +2385,7 @@ QDF_STATUS hdd_roam_register_sta(struct hdd_adapter *adapter,
 		hdd_objmgr_set_peer_mlme_auth_state(adapter->vdev, true);
 	} else {
 #ifdef WLAN_DEBUG
+
 		hdd_debug("ULA auth Sta: " QDF_MAC_ADDR_FMT
 			  " Changing TL state to CONNECTED at Join time",
 			  QDF_MAC_ADDR_REF(txrx_desc.peer_addr.bytes));
