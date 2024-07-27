@@ -109,7 +109,31 @@ static int sde_backlight_device_update_status(struct backlight_device *bd)
 	bl_lvl = mult_frac(brightness, display->panel->bl_config.bl_max_level,
 			display->panel->bl_config.brightness_max_level);
 #else /* OPLUS_BUG_STABILITY */
-		if (brightness > display->panel->bl_config.brightness_normal_max_level) {
+	if (oppo_debug_max_brightness) {
+		bl_lvl = mult_frac(brightness, oppo_debug_max_brightness,
+				display->panel->bl_config.brightness_max_level);
+	} else if (brightness == 0) {
+		bl_lvl = 0;
+	} else {
+		if (display->panel->oppo_priv.bl_remap && display->panel->oppo_priv.bl_remap_count) {
+			int i = 0;
+			int count = display->panel->oppo_priv.bl_remap_count;
+			struct oppo_brightness_alpha *lut = display->panel->oppo_priv.bl_remap;
+
+			for (i = 0; i < display->panel->oppo_priv.bl_remap_count; i++){
+				if (display->panel->oppo_priv.bl_remap[i].brightness >= brightness)
+					break;
+			}
+
+			if (i == 0)
+				bl_lvl = lut[0].alpha;
+			else if (i == count)
+				bl_lvl = lut[count - 1].alpha;
+			else
+				bl_lvl = interpolate(brightness, lut[i-1].brightness,
+						lut[i].brightness, lut[i-1].alpha,
+						lut[i].alpha);
+		} else if (brightness > display->panel->bl_config.brightness_normal_max_level) {
 			bl_lvl = interpolate(brightness,
 					display->panel->bl_config.brightness_normal_max_level,
 					display->panel->bl_config.brightness_max_level,
@@ -119,6 +143,8 @@ static int sde_backlight_device_update_status(struct backlight_device *bd)
 			bl_lvl = mult_frac(brightness, display->panel->bl_config.bl_normal_max_level,
 					display->panel->bl_config.brightness_normal_max_level);
 		}
+	}
+	SDE_DEBUG("brightness = %d, bl_lvl = %d\n", brightness, bl_lvl);
 #endif /* OPLUS_BUG_STABILITY */
 
 	if (!bl_lvl && brightness)
@@ -1991,18 +2017,10 @@ static int sde_connector_atomic_check(struct drm_connector *connector,
 	return 0;
 }
 
-#ifdef OPLUS_BUG_STABILITY
-/* xupengcheng@MULTIMEDIA.DISPLAY.LCD, 2020/12/07, add for 19696 esd check */
-extern void set_esd_check_happened(struct dsi_panel *panel,int val);
-#endif/* OPLUS_BUG_STABILITY */
 static void _sde_connector_report_panel_dead(struct sde_connector *conn,
 	bool skip_pre_kickoff)
 {
 	struct drm_event event;
-#ifdef OPLUS_BUG_STABILITY
-/* xupengcheng@MULTIMEDIA.DISPLAY.LCD, 2020/12/07, add for 19696 esd check */
-	struct dsi_display *display;
-#endif/* OPLUS_BUG_STABILITY */
 
 	if (!conn)
 		return;
@@ -2014,13 +2032,6 @@ static void _sde_connector_report_panel_dead(struct sde_connector *conn,
 	 */
 	if (conn->panel_dead)
 		return;
-
-	#ifdef OPLUS_BUG_STABILITY
-	/* xupengcheng@MULTIMEDIA.DISPLAY.LCD, 2020/12/07, add for 19696 esd check */
-	display = (struct dsi_display *)(conn->display);
-	set_esd_check_happened(display->panel,1);
-	#endif /* OPLUS_BUG_STABILITY */
-
 	conn->panel_dead = true;
 	event.type = DRM_EVENT_PANEL_DEAD;
 	event.length = sizeof(bool);

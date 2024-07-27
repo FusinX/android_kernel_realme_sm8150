@@ -54,6 +54,7 @@
 extern int oppo_dimlayer_fingerprint_failcount;
 extern int oppo_underbrightness_alpha;
 extern int msm_drm_notifier_call_chain(unsigned long val, void *v);
+extern int oppo_request_power_status;
 #ifdef OPLUS_FEATURE_AOD_RAMLESS
 // Yuwei.Zhang@MULTIMEDIA.DISPLAY.LCD, 2020/09/25, sepolicy for aod ramless
 extern int oppo_display_atomic_check(struct drm_crtc *crtc, struct drm_crtc_state *state);
@@ -5459,6 +5460,7 @@ static int sde_crtc_onscreenfinger_atomic_check(struct sde_crtc_state *cstate,
 	int aod_index = -1;
 	int zpos = INT_MAX;
 	int mode;
+	int panel_power_mode;
 	int fp_mode = oppo_onscreenfp_status;
 	int dimlayer_hbm = oppo_dimlayer_hbm;
 	int dimlayer_bl = 0;
@@ -5511,9 +5513,11 @@ static int sde_crtc_onscreenfinger_atomic_check(struct sde_crtc_state *cstate,
 	}
 
 	SDE_EVT32(cstate->fingerprint_dim_layer);
+	cstate->fingerprint_dim_layer = NULL;
 	cstate->fingerprint_mode = false;
 	cstate->fingerprint_pressed = false;
 
+	/* initalize dim layer */
 	if (dimlayer_hbm || dimlayer_bl) {
 		if (fp_index >= 0 && fppressed_index >= 0) {
 			if (pstates[fp_index].stage >= pstates[fppressed_index].stage) {
@@ -5529,38 +5533,54 @@ static int sde_crtc_onscreenfinger_atomic_check(struct sde_crtc_state *cstate,
 			return 0;
 		}
 
-		if (dimlayer_hbm)
+		if (dimlayer_hbm && (oppo_get_panel_brightness() != 0))
 			cstate->fingerprint_mode = true;
 		else
 			cstate->fingerprint_mode = false;
 
 		SDE_DEBUG("debug for get cstate->fingerprint_mode = %d\n", cstate->fingerprint_mode);
+		panel_power_mode = oppo_get_panel_power_mode();
 
+		/* when aod layer is present */
 		if (aod_index >= 0) {
-			if (zpos > pstates[aod_index].stage)
-				zpos = pstates[aod_index].stage;
-			pstates[aod_index].stage++;
+			/* set dimlayer alpha transparent, appear AOD layer by force */
+			if (((fp_index >= 0) || (fppressed_index < 0)) &&
+				((panel_power_mode == SDE_MODE_DPMS_LP1) || (panel_power_mode == SDE_MODE_DPMS_LP2))) {
+				oppo_set_aod_dim_alpha(CUST_A_TRANS);
+			}
+			/*
+			 * set dimlayer alpha opaque, disappear AOD layer by force when pressed down
+			 * and SDE_MODE_DPMS_LP1/SDE_MODE_DPMS_LP2
+			 */
+			if (((fp_mode == 1) && (panel_power_mode != SDE_MODE_DPMS_ON))
+				|| (oppo_request_power_status == OPPO_DISPLAY_POWER_ON))
+				oppo_set_aod_dim_alpha(CUST_A_OPAQUE);
+		} else { /* when screen on, restore dimlayer alpha */
+			if (oppo_get_panel_brightness() != 0)
+				oppo_set_aod_dim_alpha(CUST_A_NO);
+		}
+
+		SDE_DEBUG("aod_index = %d, fp_index= %d, fppressed_index = %d, fp_mode=%d, panel_power_mode = %d, bl=%d\n",
+			aod_index, fp_index, fppressed_index, fp_mode, panel_power_mode, oppo_get_panel_brightness());
+
+		/* find the min zpos in fp_index/fppressed_index stage to dim layer, then fp_index/fppressed_index stage increase one */
+		if (fp_index >= 0) {
+			if (zpos > pstates[fp_index].stage)
+				zpos = pstates[fp_index].stage;
 		}
 		if (fppressed_index >= 0) {
 			if (zpos > pstates[fppressed_index].stage)
 				zpos = pstates[fppressed_index].stage;
-			pstates[fppressed_index].stage++;
-		}
-		if (fp_index >= 0) {
-			if (zpos > pstates[fp_index].stage)
-				zpos = pstates[fp_index].stage;
-			pstates[fp_index].stage++;
 		}
 
+		/* increase zpos(sde stage) which is on the dim layer, stage which is under dim layer zpos preserve */
 		for (i = 0; i < cnt; i++) {
-			if (i == fp_index || i == fppressed_index ||
-			    i == aod_index)
-				continue;
 			if (pstates[i].stage >= zpos) {
 				pstates[i].stage++;
 			}
 		}
 
+		/* when no aod_index/fppressed_index/fp_index layer, dim layer's zpos is the most stage */
 		if (zpos == INT_MAX) {
 			zpos = 0;
 			dimlayer_is_top = true;
@@ -5597,6 +5617,7 @@ static int sde_crtc_onscreenfinger_atomic_check(struct sde_crtc_state *cstate,
 		SDE_DEBUG("debug for get cstate->fingerprint_pressed = %d\n", cstate->fingerprint_pressed);
 	} else {
 		oppo_underbrightness_alpha = 0;
+		oppo_set_aod_dim_alpha(CUST_A_NO);
 		cstate->fingerprint_dim_layer = NULL;
 		cstate->fingerprint_mode = false;
 		cstate->fingerprint_pressed = false;
