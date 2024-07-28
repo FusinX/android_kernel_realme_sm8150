@@ -3438,7 +3438,7 @@ static int __init oppo_display_private_api_init(void)
 		return -EPROBE_DEFER;
 	}
 
-	oppo_display_kobj = kobject_create_and_add("oplus_display", kernel_kobj);
+	oppo_display_kobj = kobject_create_and_add("oppo_display", kernel_kobj);
 
 	if (!oppo_display_kobj) {
 		return -ENOMEM;

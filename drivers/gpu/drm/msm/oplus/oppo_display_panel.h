@@ -32,8 +32,8 @@
 #include "oppo_dc_diming.h"
 #include "oppo_onscreenfingerprint.h"
 
-#define OPPO_PANEL_NAME "oplus_display"
-#define OPPO_PANEL_CLASS_NAME "oplus_display_class"
+#define OPPO_PANEL_NAME "oppo_display"
+#define OPPO_PANEL_CLASS_NAME "oppo_display_class"
 
 #define OPPO_PANEL_IOCTL_BASE			'o'
 

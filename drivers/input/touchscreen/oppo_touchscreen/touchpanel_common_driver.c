@@ -151,7 +151,37 @@ __attribute__((weak)) void release_algorithm_points(struct touchpanel_data *ts)
 }
 #endif
 
+/**
+ * tp_gesture_enable_flag_oncell - expose gesture control status for other modules that are using oncell
+ * Touchpanel IC's.
+ * Return gesture_enable status.
+ */
 
+int tp_gesture_enable_flag_oncell(void)
+{
+        if (!g_tp) {
+                return LCD_POWER_OFF;
+        }
+
+        TPD_INFO("g_tp->gesture_enable is %d\n", g_tp->gesture_enable);
+
+        return (g_tp->gesture_enable > 0) ? LCD_POWER_ON : LCD_POWER_OFF;
+}
+
+/**
+ * tp_fp_enable_flag -   expose fingerprint control status for other module.
+ * Return gesture_enable status.
+ */
+int tp_fp_enable_flag(void)
+{
+        if (!g_tp) {
+                return FP_STATUS_OFF;
+        }
+
+        TPD_INFO("g_tp->fp_enable is %d\n", g_tp->fp_enable);
+
+        return (g_tp->fp_enable > 0) ? FP_STATUS_ON : FP_STATUS_OFF;
+}
 
 
 /*******Part3:Function  Area********************************/
