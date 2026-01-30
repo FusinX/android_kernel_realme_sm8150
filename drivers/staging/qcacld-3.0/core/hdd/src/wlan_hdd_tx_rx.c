@@ -72,7 +72,91 @@
 #include "nan_public_structs.h"
 #include "nan_ucfg_api.h"
 #include <wlan_hdd_sar_limits.h>
+/* --- INJECTION PATCH HEADERS START --- */
+#include <wlan_objmgr_cmn.h>
+#include <wlan_objmgr_vdev_obj.h>
+#include <wlan_objmgr_pdev_obj.h>
+#include <wlan_objmgr_psoc_obj.h>
+#include <wlan_lmac_if_def.h> 
 
+/* Define params with likely alignment for SM8150 */
+typedef struct {
+    uint32_t desc_id;
+    uint32_t vdev_id;
+    uint32_t chanfreq;
+    uint32_t tx_type;
+    uint32_t use_6mbps;
+    uint32_t preamble; 
+} wmi_mgmt_params_shim_t;
+
+/* Helper function with SAFE frequency handling */
+static netdev_tx_t hdd_monitor_tx_send(struct sk_buff *skb, struct net_device *dev)
+{
+    struct hdd_adapter *adapter;
+    struct wlan_objmgr_vdev *vdev;
+    struct wlan_objmgr_psoc *psoc;
+    struct wlan_lmac_if_tx_ops *tx_ops;
+    QDF_STATUS status;
+    wmi_mgmt_params_shim_t params = {0};
+    uint32_t current_freq = 0;
+
+    if (!dev || !skb) return NETDEV_TX_OK;
+    
+    adapter = WLAN_HDD_GET_PRIV_PTR(dev);
+
+    /* DEBUG: Enable this if you see no logs in dmesg
+    hdd_err("INJECTION: Packet intercepted. Mode: %d", adapter->device_mode); 
+    */
+
+    if (adapter->device_mode != QDF_MONITOR_MODE) {
+        return NETDEV_TX_OK;
+    }
+
+    vdev = adapter->vdev;
+    if (!vdev) {
+        hdd_err("INJECTION: VDEV is NULL");
+        goto drop_pkt;
+    }
+
+    psoc = wlan_vdev_get_psoc(vdev);
+    if (!psoc) goto drop_pkt;
+
+    tx_ops = wlan_psoc_get_lmac_if_txops(psoc);
+    if (!tx_ops || !tx_ops->mgmt_txrx_tx_ops.mgmt_tx_send) {
+        hdd_err("INJECTION: TX OPS not found");
+        goto drop_pkt;
+    }
+
+    /* * REMOVED: wlan_vdev_get_active_freq (caused compilation error)
+     * FIX: Use 0. Firmware interprets 0 as "transmit on current active channel"
+     */
+    current_freq = 0;
+
+    params.desc_id = 0;
+    params.vdev_id = adapter->vdev_id;
+    params.chanfreq = current_freq; 
+    params.tx_type = 0; 
+    params.use_6mbps = 1; /* Try forcing 6mbps rate for better compatibility */
+    params.preamble = 0; 
+
+    /* Call function pointer */
+    status = tx_ops->mgmt_txrx_tx_ops.mgmt_tx_send(vdev, skb, 0, &params);
+
+    if (QDF_IS_STATUS_ERROR(status)) {
+        hdd_err("INJECTION: FW Rejected Packet! Status=%d", status);
+        /* If send failed, we must free the SKB ourselves */
+        dev_kfree_skb_any(skb);
+    } 
+    /* * If status == QDF_STATUS_SUCCESS, the driver/firmware now owns the SKB.
+     * DO NOT free it here, or you will cause a kernel panic (double free).
+     */
+    
+    return NETDEV_TX_OK;
+
+drop_pkt:
+    dev_kfree_skb_any(skb);
+    return NETDEV_TX_OK;
+}
 #if defined(QCA_LL_TX_FLOW_CONTROL_V2) || defined(QCA_LL_PDEV_TX_FLOW_CONTROL)
 /*
  * Mapping Linux AC interpretation to SME AC.
@@ -1219,19 +1303,38 @@ drop_pkt_accounting:
  */
 netdev_tx_t hdd_hard_start_xmit(struct sk_buff *skb, struct net_device *net_dev)
 {
-	struct osif_vdev_sync *vdev_sync;
+    struct osif_vdev_sync *vdev_sync;
+    struct hdd_adapter *adapter;
 
-	if (osif_vdev_sync_op_start(net_dev, &vdev_sync)) {
-		hdd_debug_rl("Operation on net_dev is not permitted");
-		kfree_skb(skb);
-		return NETDEV_TX_OK;
-	}
+    if (osif_vdev_sync_op_start(net_dev, &vdev_sync)) {
+        hdd_debug_rl("Operation on net_dev is not permitted");
+        kfree_skb(skb);
+        return NETDEV_TX_OK;
+    }
 
-	__hdd_hard_start_xmit(skb, net_dev);
+    /* --- INJECTION HOOK START --- */
+    adapter = WLAN_HDD_GET_PRIV_PTR(net_dev);
+    
+    /* DEBUG: Print the mode for every packet so we can see what's happening */
+    /* Look for this line in dmesg! */
+    if (adapter) {
+        hdd_err("INJECTION DEBUG: Xmit called. Mode=%d Dev=%s", 
+                adapter->device_mode, net_dev->name);
+    }
 
-	osif_vdev_sync_op_stop(vdev_sync);
+    /* Checks for Monitor Mode (4) OR Station Mode (0) just to test */
+    if (adapter && (adapter->device_mode == QDF_MONITOR_MODE)) {
+         hdd_monitor_tx_send(skb, net_dev);
+         osif_vdev_sync_op_stop(vdev_sync);
+         return NETDEV_TX_OK;
+    }
+    /* --- INJECTION HOOK END --- */
 
-	return NETDEV_TX_OK;
+    __hdd_hard_start_xmit(skb, net_dev);
+
+    osif_vdev_sync_op_stop(vdev_sync);
+
+    return NETDEV_TX_OK;
 }
 
 /**
