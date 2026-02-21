@@ -126,22 +126,17 @@ static int aafs_show_path(struct seq_file *seq, struct dentry *dentry)
 	return 0;
 }
 
-static void aafs_i_callback(struct rcu_head *head)
+static void aafs_evict_inode(struct inode *inode)
 {
-	struct inode *inode = container_of(head, struct inode, i_rcu);
+	truncate_inode_pages_final(&inode->i_data);
+	clear_inode(inode);
 	if (S_ISLNK(inode->i_mode))
 		kfree(inode->i_link);
-	free_inode_nonrcu(inode);
-}
-
-static void aafs_destroy_inode(struct inode *inode)
-{
-	call_rcu(&inode->i_rcu, aafs_i_callback);
 }
 
 static const struct super_operations aafs_super_ops = {
 	.statfs = simple_statfs,
-	.destroy_inode = aafs_destroy_inode,
+	.evict_inode = aafs_evict_inode,
 	.show_path = aafs_show_path,
 };
 
@@ -363,7 +358,6 @@ static void aafs_remove(struct dentry *dentry)
 			simple_rmdir(dir, dentry);
 		else
 			simple_unlink(dir, dentry);
-		d_delete(dentry);
 		dput(dentry);
 	}
 	inode_unlock(dir);
@@ -426,7 +420,7 @@ static ssize_t policy_update(u32 mask, const char __user *buf, size_t size,
 	 */
 	error = aa_may_manage_policy(label, ns, mask);
 	if (error)
-		goto end_section;
+		return error;
 
 	data = aa_simple_write_to_buffer(buf, size, size, pos);
 	error = PTR_ERR(data);
@@ -434,7 +428,6 @@ static ssize_t policy_update(u32 mask, const char __user *buf, size_t size,
 		error = aa_replace_profiles(ns, label, mask, data);
 		aa_put_loaddata(data);
 	}
-end_section:
 	end_current_label_crit_section(label);
 
 	return error;
@@ -609,40 +602,6 @@ static const struct file_operations aa_fs_ns_revision_fops = {
 	.release	= ns_revision_release,
 };
 
-static void profile_query_cb(struct aa_profile *profile, struct aa_perms *perms,
-			     const char *match_str, size_t match_len)
-{
-	struct aa_perms tmp;
-	struct aa_dfa *dfa;
-	unsigned int state = 0;
-
-	if (profile_unconfined(profile))
-		return;
-	if (profile->file.dfa && *match_str == AA_CLASS_FILE) {
-		dfa = profile->file.dfa;
-		state = aa_dfa_match_len(dfa, profile->file.start,
-					 match_str + 1, match_len - 1);
-		tmp = nullperms;
-		if (state) {
-			struct path_cond cond = { };
-
-			tmp = aa_compute_fperms(dfa, state, &cond);
-		}
-	} else if (profile->policy.dfa) {
-		if (!PROFILE_MEDIATES_SAFE(profile, *match_str))
-			return;	/* no change to current perms */
-		dfa = profile->policy.dfa;
-		state = aa_dfa_match_len(dfa, profile->policy.start[0],
-					 match_str, match_len);
-		if (state)
-			aa_compute_perms(dfa, state, &tmp);
-		else
-			tmp = nullperms;
-	}
-	aa_apply_modes_to_perms(profile, &tmp);
-	aa_perms_accum_raw(perms, &tmp);
-}
-
 
 /**
  * query_data - queries a policy and writes its data to buf
@@ -763,6 +722,7 @@ static ssize_t query_label(char *buf, size_t buf_len,
 	char *label_name, *match_str;
 	size_t label_name_len, match_len;
 	struct aa_perms perms;
+	unsigned int state = 0;
 	struct label_it i;
 
 	if (!query_len)
@@ -788,15 +748,27 @@ static ssize_t query_label(char *buf, size_t buf_len,
 	if (IS_ERR(label))
 		return PTR_ERR(label);
 
-	perms = allperms;
-	if (view_only) {
-		label_for_each_in_ns(i, labels_ns(label), label, profile) {
-			profile_query_cb(profile, &perms, match_str, match_len);
+	aa_perms_all(&perms);
+	label_for_each_confined(i, label, profile) {
+		struct aa_perms tmp;
+		struct aa_dfa *dfa;
+		if (profile->file.dfa && *match_str == AA_CLASS_FILE) {
+			dfa = profile->file.dfa;
+			state = aa_dfa_match_len(dfa, profile->file.start,
+						 match_str + 1, match_len - 1);
+		} else if (profile->policy.dfa) {
+			if (!PROFILE_MEDIATES_SAFE(profile, *match_str))
+				continue;	/* no change to current perms */
+			dfa = profile->policy.dfa;
+			state = aa_dfa_match_len(dfa, profile->policy.start[0],
+						 match_str, match_len);
 		}
-	} else {
-		label_for_each(i, label, profile) {
-			profile_query_cb(profile, &perms, match_str, match_len);
-		}
+		if (state)
+			aa_compute_perms(dfa, state, &tmp);
+		else
+			aa_perms_clear(&tmp);
+		aa_apply_modes_to_perms(profile, &tmp);
+		aa_perms_accum_raw(&perms, &tmp);
 	}
 	aa_put_label(label);
 
@@ -2192,6 +2164,11 @@ static struct aa_sfs_entry aa_sfs_entry_ns[] = {
 	{ }
 };
 
+static struct aa_sfs_entry aa_sfs_entry_dbus[] = {
+	AA_SFS_FILE_STRING("mask", "acquire send receive"),
+	{ }
+};
+
 static struct aa_sfs_entry aa_sfs_entry_query_label[] = {
 	AA_SFS_FILE_STRING("perms", "allow deny audit quiet"),
 	AA_SFS_FILE_BOOLEAN("data",		1),
@@ -2207,6 +2184,7 @@ static struct aa_sfs_entry aa_sfs_entry_features[] = {
 	AA_SFS_DIR("policy",			aa_sfs_entry_policy),
 	AA_SFS_DIR("domain",			aa_sfs_entry_domain),
 	AA_SFS_DIR("file",			aa_sfs_entry_file),
+	AA_SFS_DIR("network",			aa_sfs_entry_network),
 	AA_SFS_DIR("mount",			aa_sfs_entry_mount),
 	AA_SFS_DIR("namespaces",		aa_sfs_entry_ns),
 	AA_SFS_FILE_U64("capability",		VFS_CAP_FLAGS_MASK),
@@ -2214,6 +2192,7 @@ static struct aa_sfs_entry aa_sfs_entry_features[] = {
 	AA_SFS_DIR("caps",			aa_sfs_entry_caps),
 	AA_SFS_DIR("ptrace",			aa_sfs_entry_ptrace),
 	AA_SFS_DIR("signal",			aa_sfs_entry_signal),
+	AA_SFS_DIR("dbus",			aa_sfs_entry_dbus),
 	AA_SFS_DIR("query",			aa_sfs_entry_query),
 	{ }
 };

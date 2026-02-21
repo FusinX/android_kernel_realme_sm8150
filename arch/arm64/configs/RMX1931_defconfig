@@ -1,7 +1,7 @@
 CONFIG_LOCALVERSION="-perf"
 # CONFIG_LOCALVERSION_AUTO is not set
 CONFIG_AUDIT=y
-# CONFIG_AUDITSYSCALL is not set
+CONFIG_AUDITSYSCALL=y
 CONFIG_NO_HZ=y
 CONFIG_HIGH_RES_TIMERS=y
 CONFIG_IRQ_TIME_ACCOUNTING=y
@@ -746,7 +746,7 @@ CONFIG_DEFAULT_SECURITY_APPARMOR=y
 # CONFIG_SECURITY_SELINUX is not set (Optional, but recommended to avoid conflicts)
 
 # Required for AppArmor to function correctly
-CONFIG_AUDITSYSCALL=y
+
 
 CONFIG_RESOURCE_COUNTERS=y
 CONFIG_CGROUP_HUGETLB=y
@@ -760,11 +760,8 @@ CONFIG_VT_CONSOLE=y
 CONFIG_HW_CONSOLE=y
 CONFIG_FRAMEBUFFER_CONSOLE=y
 
-CONFIG_IP_NF_TARGET_REJECT=y
-CONFIG_IP6_NF_TARGET_REJECT=y
 CONFIG_NETFILTER_XT_MATCH_HL=y
 CONFIG_NETFILTER_XT_TARGET_HL=y
-CONFIG_NETFILTER_XT_MATCH_QUOTA=y
 CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y
 
 # Enable all compression types for Initrd
@@ -776,12 +773,36 @@ CONFIG_RD_LZO=y
 CONFIG_RD_LZ4=y
 
 # Support for more loop devices
-CONFIG_BLK_DEV_LOOP_MIN_COUNT=8
 
 CONFIG_DEVTMPFS=y
 CONFIG_DEVTMPFS_MOUNT=y
 CONFIG_EXT4_FS_POSIX_ACL=y
 CONFIG_F2FS_FS_POSIX_ACL=y
-CONFIG_ANDROID_BINDER_DEVICES="binder,hwbinder,vndbinder"
+CONFIG_ANDROID_BINDER_DEVICES="binder,hwbinder,vndbinder,admin-binder"
 # CONFIG_ANDROID_PARANOID_NETWORK is not set
 CONFIG_CGROUP_DEVICE=y
+CONFIG_SYSVIPC=y
+CONFIG_PROC_FS=y
+CONFIG_SYSFS=y
+CONFIG_SIGNALFD=y
+CONFIG_EPOLL=y
+CONFIG_TIMERFD=y
+CONFIG_INOTIFY_USER=y
+CONFIG_CGROUPS=y
+CONFIG_NET_NS=y
+CONFIG_IPC_NS=y
+CONFIG_QUOTACTL=y
+CONFIG_AUTOFS4_FS=y
+CONFIG_TMPFS_XATTR=y
+CONFIG_ANDROID_BINDERFS=y
+CONFIG_SYSVIPC_SYSCTL=y
+CONFIG_DEVPTS_MULTIPLE_INSTANCES=y
+CONFIG_SECURITY_NETWORK=y
+CONFIG_SECURITY_PATH=y
+CONFIG_INTEGRITY=y
+#Force cmdline 
+CONFIG_CMDLINE_FORCE=y
+# CONFIG_CMDLINE="rcupdate.rcu_expedited=1 rcu_nocbs=0-7 cgroup.memory=nokmem,nosocket earlycon=msm_geni_serial,0xa90000 androidboot.hardware=qcom androidboot.console=ttyMSM0 androidboot.memcg=1 lpm_levels.sleep_disabled=1 video=vfb:1080x2400,bpp=32 msm_rtb.filter=0x237 service_locator.enable=1 swiotlb=2048 loop.max_part=7 androidboot.usbcontroller=a600000.dwc3 androidboot.selinux=permissive apparmor=1 security=apparmor androidboot.verifiedbootstate=orange androidboot.bootdevice=1d84000.ufshc msm_drm.dsi_display0=dsi_samsung_fhd_plus_dsc_cmd_90fps_display: rootwait ro init=/init halium-debug=telnet systempart=/dev/sda7 skip_initramfs=0 console=tty0"
+
+
+CONFIG_CMDLINE="rcupdate.rcu_expedited=1 rcu_nocbs=0-7 cgroup.memory=nokmem,nosocket console=ttyMSM0,115200n8 earlycon=msm_geni_serial,0xa90000 androidboot.hardware=qcom androidboot.console=ttyMSM0 androidboot.memcg=1 lpm_levels.sleep_disabled=1 video=vfb:1080x2400,bpp=32 msm_rtb.filter=0x237 service_locator.enable=1 swiotlb=2048 loop.max_part=7 androidboot.usbcontroller=a600000.dwc3 androidboot.selinux=permissive apparmor=1 security=apparmor androidboot.verifiedbootstate=orange androidboot.bootdevice=1d84000.ufshc root=/dev/ram0 rw msm_drm.dsi_display0=dsi_samsung_fhd_plus_dsc_cmd_90fps_display: rootwait ro init=/init halium-debug=telnet systempart=/dev/sda7 skip_initramfs=0 console=tty0"

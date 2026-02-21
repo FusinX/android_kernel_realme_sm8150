@@ -90,12 +90,10 @@ const char *aa_splitn_fqname(const char *fqname, size_t n, const char **ns_name,
 	const char *end = fqname + n;
 	const char *name = skipn_spaces(fqname, n);
 
-	*ns_name = NULL;
-	*ns_len = 0;
-
 	if (!name)
 		return NULL;
-
+	*ns_name = NULL;
+	*ns_len = 0;
 	if (name[0] == ':') {
 		char *split = strnchr(&name[1], end - &name[1], ':');
 		*ns_name = skipn_spaces(&name[1], end - &name[1]);
@@ -213,7 +211,8 @@ void aa_perm_mask_to_str(char *str, const char *chrs, u32 mask)
 	*str = '\0';
 }
 
-void aa_audit_perm_names(struct audit_buffer *ab, const char **names, u32 mask)
+void aa_audit_perm_names(struct audit_buffer *ab, const char * const *names,
+			 u32 mask)
 {
 	const char *fmt = "%s";
 	unsigned int i, perm = 1;
@@ -231,7 +230,7 @@ void aa_audit_perm_names(struct audit_buffer *ab, const char **names, u32 mask)
 }
 
 void aa_audit_perm_mask(struct audit_buffer *ab, u32 mask, const char *chrs,
-			u32 chrsmask, const char **names, u32 namesmask)
+			u32 chrsmask, const char * const *names, u32 namesmask)
 {
 	char str[33];
 
